@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b18">
+  <meta name="description" content="Выберите VPN-тариф GTVpn и создайте платёж RollyPay.">
+  <title>GTVpn — оплата подписки</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23090b18' d='M0 0h64v64H0z'/%3E%3Cpath fill='none' stroke='%2300f5d4' stroke-width='4' d='M32 6 53 14v16c0 14-9 24-21 29C20 54 11 44 11 30V14z'/%3E%3Cpath fill='%23f6f7ff' d='M37 17 23 34h9l-5 13 15-20h-9z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="./config.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b18;
+      --panel: rgba(18, 22, 43, .86);
+      --line: rgba(133, 151, 213, .19);
+      --muted: #9da7c6;
+      --text: #f5f7ff;
+      --cyan: #00f5d4;
+      --violet: #9b6bff;
+      --pink: #ff55c8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 12% 8%, rgba(0, 245, 212, .14), transparent 34rem),
+        radial-gradient(ellipse at 90% 15%, rgba(155, 107, 255, .18), transparent 34rem),
+        var(--bg);
+      font-family: Manrope, Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    a { color: inherit; }
+
+    .shell {
+      width: min(100% - 32px, 1060px);
+      margin: 0 auto;
+      padding: 28px 0 36px;
+    }
+
+    .topbar, .brand, .secure, .field-title, .card-top, .order-line {
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar { justify-content: space-between; gap: 20px; }
+    .brand { gap: 12px; text-decoration: none; }
+    .logo {
+      width: 43px;
+      height: 43px;
+      filter: drop-shadow(0 0 12px rgba(0, 245, 212, .38));
+    }
+    .brand-name { font-size: 19px; font-weight: 800; letter-spacing: .14em; }
+    .brand-name span { color: var(--cyan); }
+    .secure { gap: 8px; color: var(--muted); font-size: 12px; }
+    .secure-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan);
+    }
+
+    .hero {
+      max-width: 720px;
+      margin: 62px auto 34px;
+      text-align: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(0, 245, 212, .24);
+      border-radius: 99px;
+      background: rgba(0, 245, 212, .06);
+      color: #a6fff1;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 18px 0 12px;
+      font-size: clamp(36px, 7vw, 62px);
+      line-height: 1.06;
+      letter-spacing: -.055em;
+    }
+    h1 span {
+      color: transparent;
+      background: linear-gradient(90deg, var(--cyan), #8aa8ff 55%, #c58bff);
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+    .hero p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
+
+    .checkout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(18px);
+    }
+    .plans { padding: 24px; }
+    .section-heading {
+      margin: 0 0 17px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .plan-list { display: grid; gap: 10px; }
+    .plan {
+      position: relative;
+      display: block;
+      cursor: pointer;
+    }
+    .plan input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+    .plan-card {
+      display: block;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(255, 255, 255, .025);
+      transition: border-color .2s, background .2s, transform .2s, box-shadow .2s;
+    }
+    .plan:hover .plan-card { transform: translateY(-1px); border-color: rgba(0, 245, 212, .42); }
+    .plan input:focus-visible + .plan-card { outline: 2px solid var(--cyan); outline-offset: 3px; }
+    .plan input:checked + .plan-card {
+      border-color: var(--cyan);
+      background: linear-gradient(110deg, rgba(0, 245, 212, .11), rgba(155, 107, 255, .08));
+      box-shadow: inset 0 0 0 1px rgba(0, 245, 212, .12), 0 0 24px rgba(0, 245, 212, .08);
+    }
+    .card-top { justify-content: space-between; gap: 12px; }
+    .plan-name { font-size: 16px; font-weight: 800; }
+    .plan-price { color: var(--cyan); font-size: 18px; font-weight: 800; white-space: nowrap; }
+    .plan-details { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .tag {
+      margin-left: 7px;
+      padding: 3px 7px;
+      border-radius: 99px;
+      background: rgba(155, 107, 255, .16);
+      color: #d7c4ff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .form-panel { padding: 24px; }
+    .field-title { justify-content: space-between; gap: 10px; margin: 0 0 9px; font-size: 13px; font-weight: 700; }
+    .field-title small { color: var(--muted); font-size: 10px; font-weight: 500; }
+    .input-wrap { position: relative; }
+    .input-wrap span {
+      position: absolute;
+      top: 50%;
+      left: 14px;
+      color: #6d789b;
+      font-size: 13px;
+      transform: translateY(-50%);
+    }
+    input[type="text"] {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px 0 43px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      outline: none;
+      background: rgba(5, 7, 17, .58);
+      color: var(--text);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    input[type="text"]:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0, 245, 212, .1); }
+    input::placeholder { color: #606b8b; }
+    .hint { margin: 8px 0 18px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+    .pay-button, .continue-button {
+      display: flex;
+      width: 100%;
+      min-height: 50px;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 13px;
+      background: linear-gradient(100deg, #00d9bd, #7d7aff 72%, #a66cff);
+      box-shadow: 0 8px 28px rgba(0, 216, 189, .18);
+      color: #07101a;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+      transition: filter .2s, transform .2s;
+    }
+    .pay-button:hover, .continue-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .pay-button:disabled { filter: grayscale(.45); opacity: .6; cursor: wait; transform: none; }
+    .fine-print { margin: 13px 0 0; color: #737e9e; font-size: 10px; line-height: 1.55; text-align: center; }
+
+    .message {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .message.visible { display: block; }
+    .message.error { border-color: rgba(255, 85, 200, .38); color: #ffc0e8; }
+    .message.success { border-color: rgba(0, 245, 212, .34); color: #b6fff2; }
+    .order-line { justify-content: space-between; gap: 10px; margin: 9px 0 12px; font-size: 11px; }
+    .order-line code { color: white; font-size: 10px; overflow-wrap: anywhere; }
+    .continue-button { min-height: 44px; margin-top: 12px; font-size: 12px; }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .step {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(255, 255, 255, .025);
+    }
+    .step-number { color: var(--cyan); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+    .step strong { display: block; margin-top: 7px; font-size: 12px; }
+    .step p { margin: 5px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 28px;
+      color: #7882a1;
+      font-size: 10px;
+    }
+    footer a { color: #a5b0d1; text-decoration: none; }
+    footer a:hover { color: var(--cyan); }
+
+    @media (max-width: 760px) {
+      .hero { margin: 46px auto 26px; }
+      .checkout { grid-template-columns: 1fr; }
+      .plans, .form-panel { padding: 19px; }
+      .steps { gap: 8px; }
+      .step { padding: 12px 10px; }
+      footer { flex-direction: column; align-items: center; text-align: center; }
+    }
+    @media (max-width: 420px) {
+      .shell { width: min(100% - 22px, 1060px); padding-top: 18px; }
+      .secure { font-size: 10px; }
+      .steps { grid-template-columns: 1fr; }
+      .step { display: grid; grid-template-columns: 35px 1fr; column-gap: 8px; }
+      .step-number { grid-row: span 2; }
+      .step strong { margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="GTVpn">
+        <svg class="logo" viewBox="0 0 64 64" role="img" aria-label="GTVpn">
+          <path d="M32 5 54 13v17c0 14-9 24-22 30C19 54 10 44 10 30V13L32 5Z" fill="#10162d" stroke="#00f5d4" stroke-width="2.5"/>
+          <path d="m36 15-16 21h11l-4 14 18-24H33l3-11Z" fill="#f5f7ff"/>
+          <circle cx="51" cy="12" r="3" fill="#ff55c8"/>
+        </svg>
+        <span class="brand-name">GT<span>VPN</span></span>
+      </a>
+      <div class="secure"><i class="secure-dot"></i> Безопасная оплата RollyPay</div>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow"><span class="secure-dot"></span> Быстрое подключение</div>
+      <h1>Твой интернет.<br><span>Без границ.</span></h1>
+      <p>Выбери тариф GTVpn. После создания заказа ты перейдёшь на защищённую страницу RollyPay.</p>
+    </section>
+
+    <form class="checkout" id="checkout-form">
+      <section class="panel plans" aria-labelledby="plans-heading">
+        <h2 class="section-heading" id="plans-heading">01 / Выбери тариф</h2>
+        <div class="plan-list">
+          <label class="plan">
+            <input type="radio" name="tariff" value="basic">
+            <span class="plan-card">
+              <span class="card-top"><span class="plan-name">Basic</span><span class="plan-price">49 ₽ <small>/ мес.</small></span></span>
+              <span class="plan-details">20 ГБ трафика · до 2 устройств</span>
+            </span>
+          </label>
+          <label class="plan">
+            <input type="radio" name="tariff" value="plus" checked>
+            <span class="plan-card">
+              <span class="card-top"><span class="plan-name">Plus</span><span class="plan-price">99 ₽ <small>/ мес.</small></span></span>
+              <span class="plan-details">40 ГБ трафика · до 4 устройств</span>
+            </span>
+          </label>
+          <label class="plan">
+            <input type="radio" name="tariff" value="top">
+            <span class="plan-card">
+              <span class="card-top"><span class="plan-name">Top <span class="tag">VIP</span></span><span class="plan-price">199 ₽ <small>/ мес.</small></span></span>
+              <span class="plan-details">300 ГБ трафика · до 10 устройств · VIP-чат</span>
+            </span>
+          </label>
+          <label class="plan">
+            <input type="radio" name="tariff" value="lux">
+            <span class="plan-card">
+              <span class="card-top"><span class="plan-name">Lux <span class="tag">VIP</span></span><span class="plan-price">399 ₽ <small>/ мес.</small></span></span>
+              <span class="plan-details">Безлимитный трафик · до 25 устройств · VIP-чат</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel form-panel" aria-labelledby="account-heading">
+        <h2 class="section-heading" id="account-heading">02 / Данные для заказа</h2>
+        <label class="field-title" for="telegram-id">
+          Telegram ID
+          <small>только цифры</small>
+        </label>
+        <div class="input-wrap">
+          <span aria-hidden="true">#</span>
+          <input id="telegram-id" name="telegram_id" type="text" inputmode="numeric" autocomplete="off"
+                 maxlength="16" pattern="[0-9]{1,16}" placeholder="Например, 123456789" required>
+        </div>
+        <p class="hint">Укажи ID аккаунта, для которого нужна подписка. Мы используем его для ручной выдачи доступа после проверки платежа.</p>
+        <button class="pay-button" id="pay-button" type="submit">
+          <span>Перейти к оплате RollyPay</span><span aria-hidden="true">↗</span>
+        </button>
+        <p class="fine-print">Сумму рассчитывает сервер. API-ключ не передаётся в браузер.</p>
+        <div class="message" id="message" role="status" aria-live="polite"></div>
+      </section>
+    </form>
+
+    <section class="steps" aria-label="Как проходит оплата">
+      <article class="step"><span class="step-number">STEP 01</span><strong>Создай заказ</strong><p>Укажи Telegram ID и тариф.</p></article>
+      <article class="step"><span class="step-number">STEP 02</span><strong>Оплати на RollyPay</strong><p>Перейди по защищённой ссылке платёжного сервиса.</p></article>
+      <article class="step"><span class="step-number">STEP 03</span><strong>Получишь доступ</strong><p>Администратор проверит платёж и вручную активирует подписку.</p></article>
+    </section>
+
+    <footer>
+      <span>GTVpn · Подписка на 30 дней. Активация после ручной проверки платежа.</span>
+      <span><a href="https://t.me/sweetydjemo">Поддержка</a> · <a href="mailto:sweetydjemo@gmail.com">Почта</a></span>
+    </footer>
+  </main>
+
+  <script>
+    const form = document.getElementById("checkout-form");
+    const button = document.getElementById("pay-button");
+    const message = document.getElementById("message");
+
+    function showMessage(text, kind) {
+      message.textContent = text;
+      message.className = `message visible ${kind || ""}`;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const apiUrl = window.GTVPN_PAYMENT_API || "";
+      if (!apiUrl || apiUrl.includes("YOUR-H1-PUBLIC-URL")) {
+        showMessage("Платёжный сервер ещё не подключён. Напиши в поддержку.", "error");
+        return;
+      }
+
+      const telegramId = document.getElementById("telegram-id").value.trim();
+      const tariff = new FormData(form).get("tariff");
+      if (!/^[0-9]{1,16}$/.test(telegramId)) {
+        showMessage("Введи числовой Telegram ID.", "error");
+        return;
+      }
+
+      button.disabled = true;
+      button.querySelector("span").textContent = "Создаём заказ...";
+      message.className = "message";
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramId, tariff }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Не удалось создать заказ.");
+
+        message.replaceChildren();
+        const intro = document.createElement("div");
+        intro.textContent = `Заказ ${result.order_id} создан на сумму ${result.amount} ₽.`;
+        const note = document.createElement("div");
+        note.className = "order-line";
+        const label = document.createElement("span");
+        label.textContent = "Сохрани номер заказа";
+        const order = document.createElement("code");
+        order.textContent = result.order_id;
+        note.append(label, order);
+        const followup = document.createElement("div");
+        followup.textContent = "После оплаты отправь этот номер в поддержку. Доступ выдаётся после ручной проверки платежа.";
+        const link = document.createElement("a");
+        link.className = "continue-button";
+        link.href = result.pay_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Открыть страницу оплаты ↗";
+        message.append(intro, note, followup, link);
+        message.className = "message visible success";
+      } catch (error) {
+        showMessage(error.message || "Не удалось связаться с платёжным сервером.", "error");
+      } finally {
+        button.disabled = false;
+        button.querySelector("span").textContent = "Перейти к оплате RollyPay";
+      }
+    });
+  </script>
+</body>
+</html>
