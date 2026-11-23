@@ -300,7 +300,7 @@
         </div>
         <p class="hint">Укажи ID аккаунта, для которого нужна подписка. Мы используем его для ручной выдачи доступа после проверки платежа.</p>
         <button class="pay-button" id="pay-button" type="submit">
-          <span>Перейти к оплате RollyPay</span><span aria-hidden="true">↗</span>
+          <span>Перейти к оплате</span><span aria-hidden="true">↗</span>
         </button>
         <div class="message" id="message" role="status" aria-live="polite"></div>
       </section>
@@ -379,7 +379,7 @@
         showMessage(error.message || "Не удалось связаться с платёжным сервером.", "error");
       } finally {
         button.disabled = false;
-        button.querySelector("span").textContent = "Перейти к оплате RollyPay";
+        button.querySelector("span").textContent = "Перейти к оплате";
       }
     });
   </script>
