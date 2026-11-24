@@ -192,6 +192,19 @@
     .order-line { justify-content: space-between; gap: 10px; margin: 9px 0 12px; font-size: 11px; }
     .order-line code { color: white; font-size: 10px; overflow-wrap: anywhere; }
     .continue-button { min-height: 44px; margin-top: 12px; font-size: 12px; }
+    .activation-code {
+      margin: 10px 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #050505;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
 
     .steps {
       display: grid;
@@ -249,7 +262,7 @@
 
     <section class="hero">
       <h1>Твой интернет.<br><span>Без границ.</span></h1>
-      <p>Выбери тариф GTVpn. Оплата доступна после подтверждения чата с ботом.</p>
+      <p>Выбери тариф GTVpn и укажи Telegram ID для активации VPN-ссылки.</p>
     </section>
 
     <form class="checkout" id="checkout-form">
@@ -288,9 +301,26 @@
       </section>
 
       <section class="panel form-panel" aria-labelledby="account-heading">
-        <h2 class="section-heading" id="account-heading">02 / Проверка аккаунта</h2>
+        <h2 class="section-heading" id="account-heading">02 / Оплата</h2>
+        <label class="field-title" for="telegram-id">
+          <span>Telegram ID получателя</span><small>только цифры</small>
+        </label>
+        <div class="input-wrap">
+          <span aria-hidden="true">ID</span>
+          <input
+            id="telegram-id"
+            name="telegram_id"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="15"
+            placeholder="Например, 123456789"
+            aria-describedby="telegram-id-hint account-status"
+          >
+        </div>
+        <p class="hint" id="telegram-id-hint">Узнать свой ID можно командой /chatid в боте.</p>
         <p class="hint" id="account-status" role="status" aria-live="polite">
-          Проверяем, что страница открыта из чата с ботом...
+          Введи Telegram ID или открой оплату из меню бота.
         </p>
         <button class="pay-button" id="pay-button" type="submit" disabled>
           <span>Перейти к оплате</span><span aria-hidden="true">↗</span>
@@ -300,9 +330,9 @@
     </form>
 
     <section class="steps" aria-label="Как проходит оплата">
-      <article class="step"><span class="step-number">STEP 01</span><strong>Подтверди аккаунт</strong><p>Открой оплату через меню бота.</p></article>
+      <article class="step"><span class="step-number">STEP 01</span><strong>Укажи Telegram ID</strong><p>Введи ID получателя или открой оплату из меню бота.</p></article>
       <article class="step"><span class="step-number">STEP 02</span><strong>Оплати на RollyPay</strong><p>Перейди по защищённой ссылке платёжного сервиса.</p></article>
-      <article class="step"><span class="step-number">STEP 03</span><strong>Подключение</strong><p>После подтверждения оплаты бот создаст подписку и пришлёт ссылку сюда.</p></article>
+      <article class="step"><span class="step-number">STEP 03</span><strong>Активируй VPN</strong><p>Скопируй код после оплаты и отправь боту <code>/vpn КОД</code>. Ссылка придёт в чат.</p></article>
     </section>
 
     <footer>
@@ -316,51 +346,255 @@
     const button = document.getElementById("pay-button");
     const message = document.getElementById("message");
     const accountStatus = document.getElementById("account-status");
+    const telegramIdInput = document.getElementById("telegram-id");
     const apiUrl = window.GTVPN_PAYMENT_API || "";
-    const checkoutToken = new URLSearchParams(location.search).get("checkout");
-    let checkoutVerified = false;
+    const apiConfigured = Boolean(apiUrl && !apiUrl.includes("YOUR-H1-PUBLIC-URL"));
+    const query = new URLSearchParams(location.search);
+    const checkoutToken = query.get("checkout") || "";
+    const checkoutUserId = query.get("telegram_id") || "";
+    let orderStorageKey = "";
+    let checkoutReady = false;
+    let activeOrderId = "";
+    let statusPollTimer = null;
+    let statusRequestActive = false;
 
     function showMessage(text, kind) {
       message.textContent = text;
       message.className = `message visible ${kind || ""}`;
     }
 
-    async function verifyCheckout() {
-      if (!apiUrl || apiUrl.includes("YOUR-H1-PUBLIC-URL")) {
-        accountStatus.textContent = "Платёжный сервер пока не настроен.";
-        return;
-      }
-      if (!checkoutToken) {
-        accountStatus.textContent = "Открой эту страницу из меню покупки в чате с ботом.";
-        return;
-      }
-
-      const apiBase = apiUrl.replace(/\/api\/rollypay\/create-payment\/?$/, "");
+    function saveOrder(order) {
+      if (!orderStorageKey) return;
       try {
-        const response = await fetch(
-          `${apiBase}/api/checkout/verify?token=${encodeURIComponent(checkoutToken)}`,
-          { cache: "no-store" },
-        );
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Не удалось подтвердить чат с ботом.");
-        checkoutVerified = true;
-        accountStatus.textContent = "Чат с ботом подтверждён.";
-        button.disabled = false;
-      } catch (error) {
-        accountStatus.textContent = error.message || "Не удалось проверить аккаунт.";
+        localStorage.setItem(orderStorageKey, JSON.stringify(order));
+      } catch {
+        return;
       }
     }
 
-    void verifyCheckout();
+    function clearStoredOrder() {
+      if (!orderStorageKey) return;
+      try {
+        localStorage.removeItem(orderStorageKey);
+      } catch {
+        return;
+      }
+    }
+
+    function updateCheckoutState() {
+      const telegramId = telegramIdInput.value.trim();
+      const validTelegramId = /^\d{5,15}$/.test(telegramId);
+      checkoutReady = Boolean(apiConfigured && (checkoutToken || validTelegramId));
+      button.disabled = !checkoutReady || Boolean(activeOrderId);
+
+      if (!apiUrl) {
+        accountStatus.textContent = "Платёжный сервер пока не настроен.";
+      } else if (checkoutToken) {
+        accountStatus.textContent = "Покупка привязана к Telegram-аккаунту из бота.";
+      } else if (validTelegramId) {
+        accountStatus.textContent = "Код будет привязан к указанному Telegram ID.";
+      } else {
+        accountStatus.textContent = "Введи Telegram ID или открой оплату из меню бота.";
+      }
+
+      if (!checkoutToken && validTelegramId) {
+        try {
+          localStorage.setItem("gtvpn-last-telegram-id", telegramId);
+        } catch {
+          return;
+        }
+      }
+    }
+
+    function stopStatusPolling() {
+      if (statusPollTimer !== null) {
+        window.clearInterval(statusPollTimer);
+        statusPollTimer = null;
+      }
+    }
+
+    async function checkOrderStatus(order, statusNode, checkButton) {
+      if (statusRequestActive) return;
+      statusRequestActive = true;
+      checkButton.disabled = true;
+      statusNode.textContent = "Проверяем статус оплаты...";
+      try {
+        const apiBase = apiUrl.replace(/\/api\/rollypay\/create-payment\/?$/, "");
+        const params = new URLSearchParams({
+          order_id: order.order_id,
+        });
+        if (order.status_token) params.set("status_token", order.status_token);
+        if (checkoutToken) params.set("checkout_token", checkoutToken);
+        const response = await fetch(
+          `${apiBase}/api/rollypay/order-status?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Не удалось проверить оплату.");
+
+        if (result.status === "paid" && result.activation_code) {
+          stopStatusPolling();
+          statusNode.textContent = "✅ Оплата прошла. Введи команду в чате с ботом:";
+          const code = document.createElement("div");
+          code.className = "activation-code";
+          code.textContent = result.activation_code;
+          const command = document.createElement("div");
+          command.textContent = `/vpn ${result.activation_code}`;
+          statusNode.append(code, command);
+          checkButton.hidden = true;
+        } else if (result.status === "paid" && result.activation_status === "redeemed") {
+          stopStatusPolling();
+          statusNode.textContent = "Код активирован. Ссылка подписки отправлена в Telegram.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (result.status === "paid" && result.activation_status === "assigned") {
+          stopStatusPolling();
+          statusNode.textContent = "Код уже назначен пользователю администратором.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (result.status === "paid" && result.activation_status === "waiting_for_start") {
+          stopStatusPolling();
+          statusNode.textContent = "Код закреплён. Открой бота командой /start, чтобы получить ссылку.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (result.status === "paid" && ["pending", "delivery_pending"].includes(result.activation_status)) {
+          stopStatusPolling();
+          statusNode.textContent = "Код принят, но выдача ссылки задерживается. Поддержка уведомлена.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (result.status === "paid") {
+          stopStatusPolling();
+          statusNode.textContent = "Код уже активирован. Ссылка подписки отправлена в Telegram.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (result.status === "test_paid") {
+          stopStatusPolling();
+          statusNode.textContent = "Тестовый платёж подтверждён. VPN-код для тестового платежа не выдаётся.";
+          clearStoredOrder();
+          checkButton.hidden = true;
+        } else if (["canceled", "expired", "refunded", "chargeback"].includes(result.status)) {
+          stopStatusPolling();
+          statusNode.textContent = "Этот платёж отменён или завершён без выдачи кода. Можно создать новый заказ.";
+          activeOrderId = "";
+          telegramIdInput.disabled = false;
+          try {
+            localStorage.removeItem(orderStorageKey);
+          } catch {
+            statusNode.textContent += " Обнови страницу, чтобы повторить ввод.";
+          }
+          updateCheckoutState();
+          checkButton.hidden = true;
+        } else {
+          statusNode.textContent = "Ожидаем подтверждение платежа. Статус обновится автоматически.";
+          checkButton.disabled = false;
+        }
+      } catch (error) {
+        statusNode.textContent = error.message || "Не удалось проверить статус оплаты.";
+        checkButton.disabled = false;
+      } finally {
+        statusRequestActive = false;
+      }
+    }
+
+    function renderOrder(order) {
+      if (!order || typeof order.order_id !== "string") return;
+      activeOrderId = order.order_id;
+      if (!checkoutToken) telegramIdInput.disabled = true;
+      saveOrder(order);
+      button.disabled = true;
+
+      message.replaceChildren();
+      const intro = document.createElement("div");
+      intro.textContent = `Заказ ${order.order_id} создан на сумму ${order.amount} ₽.`;
+      const note = document.createElement("div");
+      note.className = "order-line";
+      const label = document.createElement("span");
+      label.textContent = "Номер заказа";
+      const orderCode = document.createElement("code");
+      orderCode.textContent = order.order_id;
+      note.append(label, orderCode);
+      const followup = document.createElement("div");
+      followup.textContent = "После оплаты получишь код для команды /vpn. Бот отправит VPN-ссылку в чат.";
+      const link = document.createElement("a");
+      link.className = "continue-button";
+      link.href = order.pay_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Открыть страницу оплаты ↗";
+      const statusNode = document.createElement("div");
+      statusNode.textContent = "Ожидаем подтверждение оплаты...";
+      const checkButton = document.createElement("button");
+      checkButton.className = "continue-button";
+      checkButton.type = "button";
+      checkButton.textContent = "Проверить оплату";
+      checkButton.addEventListener("click", () => {
+        void checkOrderStatus(order, statusNode, checkButton);
+      });
+      message.append(intro, note, followup, link, statusNode, checkButton);
+      message.className = "message visible success";
+      void checkOrderStatus(order, statusNode, checkButton);
+      stopStatusPolling();
+      statusPollTimer = window.setInterval(
+        () => void checkOrderStatus(order, statusNode, checkButton),
+        5000,
+      );
+    }
+
+    function prepareCheckout() {
+      if (!apiConfigured) {
+        updateCheckoutState();
+        return;
+      }
+
+      if (checkoutUserId && /^\d{5,15}$/.test(checkoutUserId)) {
+        telegramIdInput.value = checkoutUserId;
+      } else if (!checkoutToken) {
+        try {
+          telegramIdInput.value = localStorage.getItem("gtvpn-last-telegram-id") || "";
+        } catch {
+          telegramIdInput.value = "";
+        }
+      }
+      telegramIdInput.readOnly = Boolean(checkoutToken);
+      orderStorageKey = checkoutToken
+        ? `gtvpn-order:${checkoutToken}`
+        : telegramIdInput.value.trim()
+          ? `gtvpn-order:id:${telegramIdInput.value.trim()}`
+          : "";
+
+      updateCheckoutState();
+      const storedOrder = (() => {
+        if (!orderStorageKey) return null;
+        try {
+          return JSON.parse(localStorage.getItem(orderStorageKey) || "null");
+        } catch {
+          return null;
+        }
+      })();
+      if (storedOrder && typeof storedOrder.order_id === "string") {
+        renderOrder(storedOrder);
+      }
+    }
+
+    telegramIdInput.addEventListener("input", () => {
+      if (!checkoutToken && !activeOrderId) {
+        orderStorageKey = telegramIdInput.value.trim()
+          ? `gtvpn-order:id:${telegramIdInput.value.trim()}`
+          : "";
+      }
+      updateCheckoutState();
+    });
+
+    prepareCheckout();
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!apiUrl || apiUrl.includes("YOUR-H1-PUBLIC-URL")) {
+      if (!apiConfigured) {
         showMessage("Платёжный сервер ещё не подключён. Напиши в поддержку.", "error");
         return;
       }
-      if (!checkoutVerified || !checkoutToken) {
-        showMessage("Открой страницу оплаты из меню бота.", "error");
+      if (!checkoutReady) {
+        showMessage("Введи корректный Telegram ID или открой оплату из меню бота.", "error");
         return;
       }
       const tariff = new FormData(form).get("tariff");
@@ -372,35 +606,19 @@
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ checkout_token: checkoutToken, tariff }),
+          body: JSON.stringify({
+            checkout_token: checkoutToken || null,
+            telegram_id: telegramIdInput.value.trim() || null,
+            tariff,
+          }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Не удалось создать заказ.");
-
-        message.replaceChildren();
-        const intro = document.createElement("div");
-        intro.textContent = `Заказ ${result.order_id} создан на сумму ${result.amount} ₽.`;
-        const note = document.createElement("div");
-        note.className = "order-line";
-        const label = document.createElement("span");
-        label.textContent = "Номер заказа";
-        const order = document.createElement("code");
-        order.textContent = result.order_id;
-        note.append(label, order);
-        const followup = document.createElement("div");
-        followup.textContent = "После оплаты бот подтвердит платёж и отправит ссылку подписки в этот чат.";
-        const link = document.createElement("a");
-        link.className = "continue-button";
-        link.href = result.pay_url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.textContent = "Открыть страницу оплаты ↗";
-        message.append(intro, note, followup, link);
-        message.className = "message visible success";
+        renderOrder(result);
       } catch (error) {
         showMessage(error.message || "Не удалось связаться с платёжным сервером.", "error");
       } finally {
-        button.disabled = !checkoutVerified;
+        button.disabled = Boolean(activeOrderId) || !checkoutReady;
         button.querySelector("span").textContent = "Перейти к оплате";
       }
     });
