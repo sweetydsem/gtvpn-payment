@@ -249,7 +249,7 @@
 
     <section class="hero">
       <h1>Твой интернет.<br><span>Без границ.</span></h1>
-      <p>Выбери тариф GTVpn. После создания заказа ты перейдёшь на защищённую страницу RollyPay.</p>
+      <p>Выбери тариф GTVpn. Оплата доступна после подтверждения чата с ботом.</p>
     </section>
 
     <form class="checkout" id="checkout-form">
@@ -288,18 +288,11 @@
       </section>
 
       <section class="panel form-panel" aria-labelledby="account-heading">
-        <h2 class="section-heading" id="account-heading">02 / Данные для заказа</h2>
-        <label class="field-title" for="telegram-id">
-          Telegram ID
-          <small>только цифры</small>
-        </label>
-        <div class="input-wrap">
-          <span aria-hidden="true">#</span>
-          <input id="telegram-id" name="telegram_id" type="text" inputmode="numeric" autocomplete="off"
-                 maxlength="16" pattern="[0-9]{1,16}" placeholder="Например, 123456789" required>
-        </div>
-        <p class="hint">Укажи ID аккаунта, для которого нужна подписка. Мы используем его для ручной выдачи доступа после проверки платежа.</p>
-        <button class="pay-button" id="pay-button" type="submit">
+        <h2 class="section-heading" id="account-heading">02 / Проверка аккаунта</h2>
+        <p class="hint" id="account-status" role="status" aria-live="polite">
+          Проверяем, что страница открыта из чата с ботом...
+        </p>
+        <button class="pay-button" id="pay-button" type="submit" disabled>
           <span>Перейти к оплате</span><span aria-hidden="true">↗</span>
         </button>
         <div class="message" id="message" role="status" aria-live="polite"></div>
@@ -307,9 +300,9 @@
     </form>
 
     <section class="steps" aria-label="Как проходит оплата">
-      <article class="step"><span class="step-number">STEP 01</span><strong>Создай заказ</strong><p>Укажи Telegram ID и тариф.</p></article>
+      <article class="step"><span class="step-number">STEP 01</span><strong>Подтверди аккаунт</strong><p>Открой оплату через меню бота.</p></article>
       <article class="step"><span class="step-number">STEP 02</span><strong>Оплати на RollyPay</strong><p>Перейди по защищённой ссылке платёжного сервиса.</p></article>
-      <article class="step"><span class="step-number">STEP 03</span><strong>Получишь доступ</strong><p>Администратор проверит платёж и вручную активирует подписку.</p></article>
+      <article class="step"><span class="step-number">STEP 03</span><strong>Подтверждение</strong><p>Бот сообщит о подтверждении оплаты; VPN-код пока выдаётся поддержкой.</p></article>
     </section>
 
     <footer>
@@ -322,26 +315,55 @@
     const form = document.getElementById("checkout-form");
     const button = document.getElementById("pay-button");
     const message = document.getElementById("message");
+    const accountStatus = document.getElementById("account-status");
+    const apiUrl = window.GTVPN_PAYMENT_API || "";
+    const checkoutToken = new URLSearchParams(location.search).get("checkout");
+    let checkoutVerified = false;
 
     function showMessage(text, kind) {
       message.textContent = text;
       message.className = `message visible ${kind || ""}`;
     }
 
+    async function verifyCheckout() {
+      if (!apiUrl || apiUrl.includes("YOUR-H1-PUBLIC-URL")) {
+        accountStatus.textContent = "Платёжный сервер пока не настроен.";
+        return;
+      }
+      if (!checkoutToken) {
+        accountStatus.textContent = "Открой эту страницу из меню покупки в чате с ботом.";
+        return;
+      }
+
+      const apiBase = apiUrl.replace(/\/api\/rollypay\/create-payment\/?$/, "");
+      try {
+        const response = await fetch(
+          `${apiBase}/api/checkout/verify?token=${encodeURIComponent(checkoutToken)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Не удалось подтвердить чат с ботом.");
+        checkoutVerified = true;
+        accountStatus.textContent = "Чат с ботом подтверждён.";
+        button.disabled = false;
+      } catch (error) {
+        accountStatus.textContent = error.message || "Не удалось проверить аккаунт.";
+      }
+    }
+
+    void verifyCheckout();
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const apiUrl = window.GTVPN_PAYMENT_API || "";
       if (!apiUrl || apiUrl.includes("YOUR-H1-PUBLIC-URL")) {
         showMessage("Платёжный сервер ещё не подключён. Напиши в поддержку.", "error");
         return;
       }
-
-      const telegramId = document.getElementById("telegram-id").value.trim();
-      const tariff = new FormData(form).get("tariff");
-      if (!/^[0-9]{1,16}$/.test(telegramId)) {
-        showMessage("Введи числовой Telegram ID.", "error");
+      if (!checkoutVerified || !checkoutToken) {
+        showMessage("Открой страницу оплаты из меню бота.", "error");
         return;
       }
+      const tariff = new FormData(form).get("tariff");
 
       button.disabled = true;
       button.querySelector("span").textContent = "Создаём заказ...";
@@ -350,7 +372,7 @@
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ telegram_id: telegramId, tariff }),
+          body: JSON.stringify({ checkout_token: checkoutToken, tariff }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Не удалось создать заказ.");
@@ -361,12 +383,12 @@
         const note = document.createElement("div");
         note.className = "order-line";
         const label = document.createElement("span");
-        label.textContent = "Сохрани номер заказа";
+        label.textContent = "Номер заказа";
         const order = document.createElement("code");
         order.textContent = result.order_id;
         note.append(label, order);
         const followup = document.createElement("div");
-        followup.textContent = "После оплаты отправь этот номер в поддержку. Доступ выдаётся после ручной проверки платежа.";
+        followup.textContent = "После оплаты бот подтвердит платёж. VPN-код пока выдаётся поддержкой.";
         const link = document.createElement("a");
         link.className = "continue-button";
         link.href = result.pay_url;
@@ -378,7 +400,7 @@
       } catch (error) {
         showMessage(error.message || "Не удалось связаться с платёжным сервером.", "error");
       } finally {
-        button.disabled = false;
+        button.disabled = !checkoutVerified;
         button.querySelector("span").textContent = "Перейти к оплате";
       }
     });
