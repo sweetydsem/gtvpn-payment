@@ -302,7 +302,7 @@
     <section class="steps" aria-label="Как проходит оплата">
       <article class="step"><span class="step-number">STEP 01</span><strong>Подтверди аккаунт</strong><p>Открой оплату через меню бота.</p></article>
       <article class="step"><span class="step-number">STEP 02</span><strong>Оплати на RollyPay</strong><p>Перейди по защищённой ссылке платёжного сервиса.</p></article>
-      <article class="step"><span class="step-number">STEP 03</span><strong>Подтверждение</strong><p>Бот сообщит о подтверждении оплаты; VPN-код пока выдаётся поддержкой.</p></article>
+      <article class="step"><span class="step-number">STEP 03</span><strong>Подключение</strong><p>После подтверждения оплаты бот создаст подписку и пришлёт ссылку сюда.</p></article>
     </section>
 
     <footer>
@@ -388,7 +388,7 @@
         order.textContent = result.order_id;
         note.append(label, order);
         const followup = document.createElement("div");
-        followup.textContent = "После оплаты бот подтвердит платёж. VPN-код пока выдаётся поддержкой.";
+        followup.textContent = "После оплаты бот подтвердит платёж и отправит ссылку подписки в этот чат.";
         const link = document.createElement("a");
         link.className = "continue-button";
         link.href = result.pay_url;
