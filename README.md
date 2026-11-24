@@ -5,7 +5,7 @@ This is a standalone website, not a Telegram Mini App. It contains no payment or
 ## Checkout flow
 
 1. The user either opens this page from the bot using a short-lived checkout token or enters the recipient's Telegram ID.
-2. The backend validates the checkout token when present, then creates a RollyPay payment bound to that Telegram ID.
+2. The backend validates the checkout token when present, then creates a RollyPay payment bound to that Telegram ID. The checkout saves the order and immediately redirects to the secure RollyPay payment page.
 3. RollyPay sends a signed webhook to the bot backend.
 4. On `payment.paid`, the backend creates a one-time activation code. The page shows it after polling the verified order status, and the bot attempts to send it to the recipient's chat.
 5. The buyer enters `/vpn CODE` in the bot. The bot creates or renews the H1/VLESS client and sends the subscription link.

@@ -381,6 +381,15 @@
       }
     }
 
+    function securePaymentUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" ? url.href : "";
+      } catch {
+        return "";
+      }
+    }
+
     function updateCheckoutState() {
       const telegramId = telegramIdInput.value.trim();
       const validTelegramId = /^\d{5,15}$/.test(telegramId);
@@ -496,8 +505,9 @@
       }
     }
 
-    function renderOrder(order) {
+    function renderOrder(order, redirectToPayment = false) {
       if (!order || typeof order.order_id !== "string") return;
+      const paymentUrl = securePaymentUrl(order.pay_url);
       activeOrderId = order.order_id;
       if (!checkoutToken) telegramIdInput.disabled = true;
       saveOrder(order);
@@ -517,12 +527,15 @@
       followup.textContent = "После оплаты получишь код для команды /vpn. Бот отправит VPN-ссылку в чат.";
       const link = document.createElement("a");
       link.className = "continue-button";
-      link.href = order.pay_url;
+      link.href = paymentUrl || "#";
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.textContent = "Открыть страницу оплаты ↗";
+      link.hidden = !paymentUrl;
       const statusNode = document.createElement("div");
-      statusNode.textContent = "Ожидаем подтверждение оплаты...";
+      statusNode.textContent = paymentUrl
+        ? "Ожидаем подтверждение оплаты..."
+        : "Ссылка оплаты недействительна. Напиши в поддержку.";
       const checkButton = document.createElement("button");
       checkButton.className = "continue-button";
       checkButton.type = "button";
@@ -532,6 +545,18 @@
       });
       message.append(intro, note, followup, link, statusNode, checkButton);
       message.className = "message visible success";
+
+      if (redirectToPayment && paymentUrl) {
+        statusNode.textContent = "Перенаправляем на страницу оплаты...";
+        stopStatusPolling();
+        statusPollTimer = window.setInterval(
+          () => void checkOrderStatus(order, statusNode, checkButton),
+          5000,
+        );
+        window.location.assign(paymentUrl);
+        return;
+      }
+
       void checkOrderStatus(order, statusNode, checkButton);
       stopStatusPolling();
       statusPollTimer = window.setInterval(
@@ -603,18 +628,35 @@
       button.querySelector("span").textContent = "Создаём заказ...";
       message.className = "message";
       try {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            checkout_token: checkoutToken || null,
-            telegram_id: telegramIdInput.value.trim() || null,
-            tariff,
-          }),
-        });
-        const result = await response.json();
+        let response;
+        try {
+          response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              checkout_token: checkoutToken || null,
+              telegram_id: telegramIdInput.value.trim() || null,
+              tariff,
+            }),
+          });
+        } catch {
+          throw new Error(
+            "Платёжный сервер недоступен. Попробуй позже или напиши в поддержку.",
+          );
+        }
+
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          throw new Error("Платёжный сервер вернул некорректный ответ.");
+        }
         if (!response.ok) throw new Error(result.error || "Не удалось создать заказ.");
-        renderOrder(result);
+        const paymentUrl = securePaymentUrl(result.pay_url);
+        if (!paymentUrl) {
+          throw new Error("Сервер оплаты не вернул безопасную ссылку на оплату.");
+        }
+        renderOrder({ ...result, pay_url: paymentUrl }, true);
       } catch (error) {
         showMessage(error.message || "Не удалось связаться с платёжным сервером.", "error");
       } finally {
