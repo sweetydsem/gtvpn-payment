@@ -29,7 +29,7 @@ The activation code is random, single-use, and only becomes valid after a signed
 Set the RollyPay terminal callback URL to:
 
 ```text
-https://de-bots8.h1cloud.net:25116/webhooks/rollypay
+https://bot176991.48-103-231-150.sslip.io/webhooks/rollypay
 ```
 
 The H1/VLESS API URL and token must be copied from that panel's API access settings. For clients, the bot uses the panel's default inbound/channel settings and sets the tariff's device and traffic limits.

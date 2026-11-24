@@ -1,1 +1,1 @@
-window.GTVPN_PAYMENT_API = "https://de-bots8.h1cloud.net:25116/api/rollypay/create-payment";
+window.GTVPN_PAYMENT_API = "https://bot176991.48-103-231-150.sslip.io/api/rollypay/create-payment";
